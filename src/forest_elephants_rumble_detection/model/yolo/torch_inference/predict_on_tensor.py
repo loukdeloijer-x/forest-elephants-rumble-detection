@@ -362,7 +362,7 @@ from tqdm import tqdm
 from ultralytics import YOLO
 import numpy as np
 
-from forest_elephants_rumble_detection.data.spectrogram.torchaudio_torch import (
+from forest_elephants_rumble_detection.model.yolo.torch_inference.torchaudio_nonumpy import (
     waveform_to_image,
 )
 

@@ -12,6 +12,9 @@ from PyQt5.QtCore import QThread, pyqtSignal, QTimer
 from multiprocessing import Queue
 import time
 
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# uncomment the next line and comment line 17 to import my attempt at inference on tensor (results in a BUG)
+#from forest_elephants_rumble_detection.model.yolo.torch_inference.predict_on_tensor import pipeline
 from forest_elephants_rumble_detection.model.yolo.predict import pipeline
 from forest_elephants_rumble_detection.utils import yaml_read, yaml_write
 
@@ -32,7 +35,7 @@ class Worker(QThread):
 
     def run(self):
             
-        config = yaml_read(Path("./data/08_artifacts/model/rumbles/yolov8/inference_config.yaml"))
+        config = yaml_read(Path("./application/08_artifacts/inference_config.yaml"))
 
         logging.basicConfig(level=config["loglevel"].upper())
 

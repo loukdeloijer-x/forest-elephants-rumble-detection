@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import namedtuple
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -8,13 +8,13 @@ import soundfile
 
 from .interfaces import ModelInterface, StorageInterface
 
-Event = namedtuple("Event", "start end")
-
+Event = namedtuple("Event", "start end freq_start freq_end probability")
 
 @dataclass
 class Events:
     rumble: list = field(default_factory=lambda: [])
     gunshot: list = field(default_factory=lambda: [])
+
 
 
 @dataclass
@@ -130,33 +130,45 @@ class FileManager:
         rumbles = file.results.rumble
         gunshots = file.results.gunshot
         event = ["Rumble"] * len(rumbles) + ["Gunshot"] * len(gunshots)
-        start = [e.start for e in rumbles] + [e.start for e in gunshots]
+        event_start = [e.start for e in rumbles] + [e.start for e in gunshots]
         event_end = [e.end for e in rumbles] + [e.end for e in gunshots]
-        event_duration = [e.end - e.start for e in rumbles] + [
-            e.end - e.start for e in gunshots
-        ]
-        site, yyyymmdd, hhmmss = Path(file.path).stem.rsplit('_', maxsplit=2)
-        start_date = datetime.strptime(yyyymmdd, '%Y%m%d').date().strftime('%m/%d/%Y')
+        freq_start = [e.freq_start for e in rumbles] + [e.freq_start for e in gunshots]
+        freq_end = [e.freq_end for e in rumbles] + [e.freq_end for e in gunshots]
+        score = [e.probability for e in rumbles] + [e.probability for e in gunshots]
+        # event_duration = [e.end - e.start for e in rumbles] + [
+        #     e.end - e.start for e in gunshots
+        # ]
+        # site, yyyymmdd, hhmmss = Path(file.path).stem.rsplit('_', maxsplit=2)
+        # start_date = datetime.strptime(yyyymmdd, '%Y%m%d').date().strftime('%m/%d/%Y')
+        # selection_n = len(rumbles) + len(gunshots)
+ 
         selection_n = len(rumbles) + len(gunshots)
+        output_date_format_str = '%m/%d/%Y'
+        site, yyyymmdd, hhmmss = Path(file.path).stem.rsplit('_', maxsplit=2)
+        start_date = datetime.strptime(yyyymmdd, '%Y%m%d').date().strftime(output_date_format_str)
+        combined_start_date_and_time = datetime.strptime(yyyymmdd + hhmmss, '%Y%m%d%H%M%S')
+        begin_timestamp_ls = [combined_start_date_and_time + timedelta(seconds=i_start) for i_start in event_start]
+        begin_hour = [i_begin_timestamp.hour for i_begin_timestamp in begin_timestamp_ls]
+        begin_date = [i_begin_timestamp.strftime(output_date_format_str) for i_begin_timestamp in begin_timestamp_ls]       
         df = pd.DataFrame(
             {
                 "View": ["Spectrogram"] * selection_n,
                 "Channel": [1] * selection_n,
                 "Event": event,  # FG required to indicate if rumble or gunshot
                 # "File Path": [path] * (len(rumbles) + len(gunshots)),  
-                "Begin Time (s)": start, # total previous time is added in update_annotation_txt
+                "Begin Time (s)": event_start, # total previous time is added in update_annotation_txt
                 "End Time (s)": event_end, # total previous time is added in update_annotation_txt
-                "Low Freq (Hz)": [-1] * selection_n,
-                "High Freq (Hz)": [-1] * selection_n,
+                "Low Freq (Hz)": freq_start,
+                "High Freq (Hz)": freq_end,
                 "Begin Path": [path] * selection_n,  # FG As in MoSCoW document
-                "File Offset (s)": start,
+                "File Offset (s)": event_start,
                 "Begin File": [name] * selection_n,
                 "Site": [site] * selection_n,
                 # "Duration (s)": event_duration,
-                "Begin Hour": [-1] * selection_n,
+                "Begin Hour": begin_hour,
                 "File Start Date": [start_date] * selection_n,
-                "Begin Date": ['mm/dd/yyyy'] * selection_n,
-                "Score": [-1] * selection_n,
+                "Begin Date": begin_date,
+                "Score": score
             }
         )  # FG these will be the columns of the output TXT file, plus the index
         empty_col_ls = [

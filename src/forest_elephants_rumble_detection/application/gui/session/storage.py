@@ -90,10 +90,6 @@ class Storage(StorageInterface):
 
     def _load_info(self, dirname):
         filename = dirname / "info.json"
-
-        # if not filename.exists():
-        #     with open(filename, 'w') as f:
-        #         json.dump('', f)
                 
         with open(filename) as f:
             info = json.load(f)

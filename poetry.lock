@@ -5854,6 +5854,7 @@ python-versions = ">=3.8"
 files = [
     {file = "ultralytics-8.2.45-py3-none-any.whl", hash = "sha256:71eaf151355fb42fda38e1878fd84a51ad00220a7d3b9a5a120c2c3a98789aab"},
     {file = "ultralytics-8.2.45.tar.gz", hash = "sha256:30e072aca93267249fda7b92633f1b1945ad6648488b9730287f1cd49267aaf5"},
+
 ]
 
 [package.dependencies]
@@ -6249,5 +6250,5 @@ test = ["big-O", "importlib-resources", "jaraco.functools", "jaraco.itertools", 
 
 [metadata]
 lock-version = "2.0"
-python-versions = "^3.11.5"
-content-hash = "17ea5e3885e02e3166155d4fd78c5e3840d98e0d99dfdb03db8f19c4c9383dba"
+python-versions = "^3.11"
+content-hash = "c9d6b17a60db9e2c8495c84124c2bbdc0c4414dc0513940c2e8a65d09acf2a59"

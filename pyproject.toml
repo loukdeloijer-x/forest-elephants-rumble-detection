@@ -7,8 +7,12 @@ readme = "README.md"
 packages = [{include = "forest_elephants_rumble_detection", from = "src"}]
 
 [tool.poetry.dependencies]
+
+integrate-session-adv
 # python = "^3.12"  FG
-python = "^3.11.5"
+
+python = "^3.11"
+
 torch = "^2.3.0"
 numpy = "^1.26.4"
 torchvision = "^0.18.0"

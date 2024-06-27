@@ -133,7 +133,7 @@ class MainWindow(QMainWindow):
             self.process_button.setEnabled(False)
 
     def process_files(self):
-        self.start_time = time.time()  # Record start time
+        self.processing_start_time = time.time()  # Record start time
         self.queue = Queue()
         self.workers = []
 
@@ -172,8 +172,9 @@ class MainWindow(QMainWindow):
         progress = int((self.completed_files / self.total_files) * 100)
         self.progress_bar.setValue(progress)
         self.output_label.setText(f"Processed {self.completed_files}/{self.total_files} files")
-        elapsed_time = time.time() - self.start_time  # Calculate elapsed time
-        self.time_label.setText(f"Processing Time: {int(elapsed_time)} seconds")
+    
+        total_elapsed_time = time.time() - self.processing_start_time  # Calculate elapsed time
+        self.time_label.setText(f"Processing Time: {int(total_elapsed_time)} seconds")
 
         if self.completed_files == self.total_files:
             self.process_button.setEnabled(True)

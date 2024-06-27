@@ -4,6 +4,7 @@ from collections import namedtuple
 from forest_elephants_rumble_detection.utils import yaml_read
 from pathlib import Path
 from ultralytics import YOLO
+import logging
 from forest_elephants_rumble_detection.model.yolo.predict import pipeline
 
 class Model(ModelInterface):
@@ -20,6 +21,7 @@ class Model(ModelInterface):
         config = yaml_read(Path(r"src/forest_elephants_rumble_detection/application/08_artifacts/inference_config.yaml"))
 
         model = YOLO(config["model_weights_filepath"])
+        logging.basicConfig(level=config['loglevel'].upper())
 
         df_pipeline = pipeline(
             model=model,

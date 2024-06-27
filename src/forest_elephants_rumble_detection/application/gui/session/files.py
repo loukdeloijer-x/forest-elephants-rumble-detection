@@ -27,7 +27,6 @@ class File:
 
     name: str
     path: str
-    path_2: Path
     duration: float
     sample_rate: int
     is_analyzed: bool
@@ -104,7 +103,7 @@ class FileManager:
             f = File(
                 name=Path(path).name,  # FG name=path.split(os.path.sep)[-1],
                 path=str(path),
-                path_2 = Path(path),
+                #path_2 = Path(path),
                 duration=info.duration,
                 sample_rate=info.samplerate,
                 is_analyzed=False,

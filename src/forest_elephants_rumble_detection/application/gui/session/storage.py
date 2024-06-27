@@ -44,7 +44,6 @@ class StorageInfo:
         f = File(
             name=self.name,
             path=str(self.path),
-            path_2=Path(str(self.path)),
             duration=self.duration,
             sample_rate=self.sample_rate,
             is_analyzed=self.is_analyzed,

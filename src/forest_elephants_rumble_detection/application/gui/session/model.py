@@ -23,7 +23,7 @@ class Model(ModelInterface):
 
         df_pipeline = pipeline(
             model=model,
-            audio_filepaths=[file.path_2],
+            audio_filepaths=[Path(file.path)],
             duration=config["duration"],
             overlap=config["overlap"],
             width=config["width"],
@@ -38,9 +38,6 @@ class Model(ModelInterface):
             save_predictions=config["save_predictions"],
             verbose=config["verbose"],
         )
-   
-        # Define Event namedtuple
-        # Event = namedtuple("Event", "start end freq_start")
 
         # Function to map DataFrame to Events
         def map_events(df, event_class):

@@ -17,7 +17,7 @@ class Model(ModelInterface):
         Performance inference
         """
 
-        config = yaml_read(Path("/Users/loukdeloijer/forest-elephants-rumble-detection/src/forest_elephants_rumble_detection/application/08_artifacts/inference_config.yaml"))
+        config = yaml_read(Path(r"src/forest_elephants_rumble_detection/application/08_artifacts/inference_config.yaml"))
 
         model = YOLO(config["model_weights_filepath"])
 

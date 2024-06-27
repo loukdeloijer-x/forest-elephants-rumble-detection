@@ -69,7 +69,10 @@ class Storage(StorageInterface):
         for i, e in enumerate(events[start:], start=start):
             filename = self.app_data_dir / subdir / event / (str(i) + ".json")
             with open(filename, "w") as f:
-                json.dump({"start": e.start, "end": e.end}, f)
+                json.dump(
+                    {"start": e.start, "end": e.end, "freq_start": e.freq_start,  "freq_end": e.freq_end, "probability": e.probability}, 
+                    f
+                )
 
     def _load_events(self, dirname, event):
         events = []

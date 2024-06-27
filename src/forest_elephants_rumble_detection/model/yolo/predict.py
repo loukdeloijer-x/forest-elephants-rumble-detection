@@ -273,7 +273,7 @@ def pipeline(
         )
         df["audio_filepath"] = str(audio_filepath)
         df["instance_class"] = "rumble"
-        df.to_csv(sub_output_dir / "results.csv")
+        # df.to_csv(sub_output_dir / "results.csv")
         dfs.append(df)
         end_time = time.time()
         # Calculate elapsed time

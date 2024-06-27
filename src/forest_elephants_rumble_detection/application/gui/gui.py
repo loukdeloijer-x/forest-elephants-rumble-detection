@@ -29,7 +29,7 @@ class Worker(QThread):
     progress = pyqtSignal(int, int)  
     finished = pyqtSignal(int, str)  # Signal to indicate processing finished (file index, output path)
 
-    def __init__(self, output_dir, model, queue, file, session):
+    def __init__(self, output_dir, model, queue, file, session, storage):
         super().__init__()
         self.output_dir = output_dir
         self.queue = queue # Queue to communicate progress
@@ -37,10 +37,12 @@ class Worker(QThread):
         self.file = file
         self.session = session
         self.model = model
+        self.storage = storage
 
     def run(self):
     
         self.model.analyze(file=self.file, output_dir=self.output_dir)
+        self.storage.remove_file(self.file)
         self.session.update_annotation_txt(self.file.export())
         self.session.update_summary_df(self.file)
         self.session.save_summary_df()
@@ -155,6 +157,7 @@ class MainWindow(QMainWindow):
         tmp_session_dir = Path(self.output_dir) / "tmp_session"
         tmp_session_dir.mkdir(exist_ok=True)
 
+
         #config = yaml_read(Path("/Users/loukdeloijer/forest-elephants-rumble-detection/src/forest_elephants_rumble_detection/application/08_artifacts/inference_config.yaml"))
 
         model = Model() 
@@ -169,7 +172,8 @@ class MainWindow(QMainWindow):
         # file_batches = [self.selected_files[i:i + batch_size] for i in range(0, len(self.selected_files), batch_size)]
 
         for file in file_manager.files:
-            worker = Worker(file=file, model=model, output_dir=self.output_dir, session=session, queue=self.queue)
+            worker = Worker(file=file, model=model, output_dir=self.output_dir, session=session, queue=self.queue, storage=storage)
+
             worker.finished.connect(self.file_finished)
             self.workers.append(worker)
             worker.start()

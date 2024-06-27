@@ -16,7 +16,7 @@ class Model(ModelInterface):
         """
         Performance inference
         """
-
+        
         config = yaml_read(Path(r"src/forest_elephants_rumble_detection/application/08_artifacts/inference_config.yaml"))
 
         model = YOLO(config["model_weights_filepath"])
@@ -40,16 +40,22 @@ class Model(ModelInterface):
         )
    
         # Define Event namedtuple
-        Event = namedtuple("Event", "start end")
+        # Event = namedtuple("Event", "start end freq_start")
 
         # Function to map DataFrame to Events
         def map_events(df, event_class):
             events = Events()
             for _, row in df.iterrows():
                 if row['instance_class'] == 'rumble':
-                    events.rumble.append(Event(start=row['t_start'], end=row['t_end']))
+                    events.rumble.append(Event(
+                        start=row['t_start'], end=row['t_end'], freq_start=row['freq_start'], freq_end=row['freq_end'],
+                        probability=row["probability"]
+                    ))
                 elif row['instance_class'] == 'gunshot':
-                    events.gunshot.append(Event(start=row['t_start'], end=row['t_end']))
+                    events.gunshot.append(Event(
+                        start=row['t_start'], end=row['t_end'], freq_start=row['freq_start'], freq_end=row['freq_end'],
+                        probability=row["probability"]
+                    ))
             return events
 
         # Apply the function

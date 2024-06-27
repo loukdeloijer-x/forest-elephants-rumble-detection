@@ -247,7 +247,9 @@ def pipeline(
     for audio_filepath in audio_filepaths:
         start_time = time.time()
         sub_output_dir = output_dir / audio_filepath.stem
-        sub_output_dir.mkdir(exist_ok=True, parents=True)
+        if save_predictions:
+            sub_output_dir.mkdir(exist_ok=True, parents=True)
+            
         yolov8_predictions = inference(
             model=model,
             audio_filepath=audio_filepath,

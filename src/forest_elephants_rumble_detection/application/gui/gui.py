@@ -4,10 +4,9 @@ import shutil
 import logging
 from pathlib import Path
 
-from ultralytics import YOLO
-
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QPushButton, QLabel, 
                              QVBoxLayout, QWidget, QFileDialog, QProgressBar)
+                    
 from PyQt5.QtCore import QThread, pyqtSignal, QTimer
 from multiprocessing import Queue
 import time
@@ -16,12 +15,6 @@ from forest_elephants_rumble_detection.application.gui.session.session import Se
 from forest_elephants_rumble_detection.application.gui.session.storage import Storage
 from forest_elephants_rumble_detection.application.gui.session.files import FileManager
 from forest_elephants_rumble_detection.application.gui.session.model import Model
-
-# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-# uncomment the next line and comment line 17 to import my attempt at inference on tensor (results in a BUG)
-#from forest_elephants_rumble_detection.model.yolo.torch_inference.predict_on_tensor import pipeline
-from forest_elephants_rumble_detection.model.yolo.predict import pipeline
-from forest_elephants_rumble_detection.utils import yaml_read, yaml_write
 
 # Worker class to handle processing in a separate thread
 class Worker(QThread):
@@ -33,7 +26,6 @@ class Worker(QThread):
         super().__init__()
         self.output_dir = output_dir
         self.queue = queue # Queue to communicate progress
-        #self.config = config
         self.file = file
         self.session = session
         self.model = model
@@ -154,15 +146,12 @@ class MainWindow(QMainWindow):
             self.message_label.setText("All files already processed")
             return
 
-        tmp_session_dir = Path(self.output_dir) / "tmp_session"
-        tmp_session_dir.mkdir(exist_ok=True)
-
-
-        #config = yaml_read(Path("/Users/loukdeloijer/forest-elephants-rumble-detection/src/forest_elephants_rumble_detection/application/08_artifacts/inference_config.yaml"))
-
         model = Model() 
 
-        storage = Storage(app_data_dir=tmp_session_dir)
+        self.tmp_session_dir = Path(self.output_dir) / "tmp_session"
+        self.tmp_session_dir.mkdir(exist_ok=True)
+
+        storage = Storage(app_data_dir=self.tmp_session_dir)
         file_manager = FileManager(model, storage)
 
         for file in session.remaining_input_wav:
@@ -177,20 +166,24 @@ class MainWindow(QMainWindow):
             worker.finished.connect(self.file_finished)
             self.workers.append(worker)
             worker.start()
-
-
-    def file_finished(self, output_path):
+    
+    def file_finished(self):
         self.completed_files += 1
         progress = int((self.completed_files / self.total_files) * 100)
         self.progress_bar.setValue(progress)
         self.output_label.setText(f"Processed {self.completed_files}/{self.total_files} files")
+        elapsed_time = time.time() - self.start_time  # Calculate elapsed time
+        self.time_label.setText(f"Processing Time: {int(elapsed_time)} seconds")
 
         if self.completed_files == self.total_files:
-            elapsed_time = time.time() - self.start_time  # Calculate elapsed time
-            self.time_label.setText(f"Processing Time: {int(elapsed_time)} seconds")  # Update the label
             self.process_button.setEnabled(True)
-            self.output_label.setText(f"All files processed. Output saved to: {output_path}")
+            self.output_label.setText(f"All files processed. Output saved to: {self.output_dir}")
+            self.cleanup_tmp_session()
 
+    def cleanup_tmp_session(self):
+        if self.tmp_session_dir and self.tmp_session_dir.exists():
+            shutil.rmtree(self.tmp_session_dir)
+            
 if __name__ == "__main__":
     app = QApplication(sys.argv)  # Create a QApplication
     mainWindow = MainWindow()     # Create an instance of MainWindow

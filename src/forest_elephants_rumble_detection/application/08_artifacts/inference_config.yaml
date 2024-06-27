@@ -11,5 +11,5 @@ batch_size: 64
 verbose: True
 save_spectrograms : False
 save_predictions : False
-model_weights_filepath : "./data/08_artifacts/model/rumbles/yolov8/weights/best.pt"
+model_weights_filepath : "/Users/loukdeloijer/forest-elephants-rumble-detection/data/08_artifacts/model/rumbles/yolov8/weights/best.pt"
 loglevel: "info"

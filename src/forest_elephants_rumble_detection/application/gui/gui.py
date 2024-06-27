@@ -12,12 +12,16 @@ from PyQt5.QtCore import QThread, pyqtSignal, QTimer
 from multiprocessing import Queue
 import time
 
+from forest_elephants_rumble_detection.application.gui.session.session import Session
+from forest_elephants_rumble_detection.application.gui.session.storage import Storage
+from forest_elephants_rumble_detection.application.gui.session.files import FileManager
+from forest_elephants_rumble_detection.application.gui.session.model import Model
+
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 # uncomment the next line and comment line 17 to import my attempt at inference on tensor (results in a BUG)
 #from forest_elephants_rumble_detection.model.yolo.torch_inference.predict_on_tensor import pipeline
 from forest_elephants_rumble_detection.model.yolo.predict import pipeline
 from forest_elephants_rumble_detection.utils import yaml_read, yaml_write
-
 
 # Worker class to handle processing in a separate thread
 class Worker(QThread):
@@ -25,59 +29,23 @@ class Worker(QThread):
     progress = pyqtSignal(int, int)  
     finished = pyqtSignal(int, str)  # Signal to indicate processing finished (file index, output path)
 
-    def __init__(self, file_index, file_paths, input_dir, output_dir, queue):
+    def __init__(self, output_dir, model, queue, file, session):
         super().__init__()
-        self.file_index = file_index  # Index of the file being processed
-        self.file_paths = file_paths    # Path of the file being processed
         self.output_dir = output_dir
-        self.input_dir = input_dir # Directory to save processed files
-        self.queue = queue            # Queue to communicate progress
+        self.queue = queue # Queue to communicate progress
+        #self.config = config
+        self.file = file
+        self.session = session
+        self.model = model
 
     def run(self):
+    
+        self.model.analyze(file=self.file, output_dir=self.output_dir)
+        self.session.update_annotation_txt(self.file.export())
+        self.session.update_summary_df(self.file)
+        self.session.save_summary_df()
             
-        config = yaml_read(Path("./application/08_artifacts/inference_config.yaml"))
-
-        logging.basicConfig(level=config["loglevel"].upper())
-
-        model = YOLO(config["model_weights_filepath"])
-
-        for i, file_path in enumerate(self.file_paths):
-            df_pipeline = pipeline(
-                model=model,
-                audio_filepaths=[file_path],
-                duration=config["duration"],
-                overlap=config["overlap"],
-                width=config["width"],
-                height=config["height"],
-                freq_min=config["freq_min"],
-                freq_max=config["freq_max"],
-                n_fft=config["n_fft"],
-                hop_length=config["hop_length"],
-                batch_size=config["batch_size"],
-                output_dir=self.output_dir,
-                save_spectrograms=config["save_spectrograms"],
-                save_predictions=config["save_predictions"],
-                verbose=config["verbose"],
-            )
-
-            logging.info(f"Saving the results")
-            logging.info(df_pipeline.head())
-            df_pipeline.to_csv(self.output_dir / "results.csv")
-            yaml_write(
-                self.output_dir / "args.yaml",
-                {
-                    "config": {**config},
-                    "args": {
-                        "batch_size": config["batch_size"],
-                        "overlap": config["overlap"],
-                        "model_weights_filepath": str(config["model_weights_filepath"]),
-                        "input_dir_audio_filepaths": self.input_dir,
-                    },
-                },
-            )
-
-        self.finished.emit(self.file_index, str(self.output_dir))  # Emit finished signal with output path
-
+        self.finished.emit(self.file, str(self.output_dir))  # Emit finished signal with output path
 
 # Main window class
 class MainWindow(QMainWindow):
@@ -128,6 +96,8 @@ class MainWindow(QMainWindow):
         self.time_label = QLabel("Processing Time: 0 seconds")
         layout.addWidget(self.time_label)
 
+        self.message_label = QLabel("")  # Label to display messages
+        layout.addWidget(self.message_label)
 
         # Container widget to hold the layout
         container = QWidget()
@@ -173,22 +143,39 @@ class MainWindow(QMainWindow):
         self.queue = Queue()
         self.workers = []
 
-        batch_size = 1
-        file_batches = [self.selected_files[i:i + batch_size] for i in range(0, len(self.selected_files), batch_size)]
-
         self.total_files = len(self.selected_files)
         self.completed_files = 0
         self.progress_bar.setValue(0)
 
-        for index, file_batch in enumerate(file_batches):
-            worker = Worker(index, file_batch, self.input_dir, self.output_dir, self.queue)
+        session = Session(str(self.input_dir), str(self.output_dir))
+        if not session.remaining_input_wav:
+            self.message_label.setText("All files already processed")
+            return
+
+        tmp_session_dir = Path(self.output_dir) / "tmp_session"
+        tmp_session_dir.mkdir(exist_ok=True)
+
+        #config = yaml_read(Path("/Users/loukdeloijer/forest-elephants-rumble-detection/src/forest_elephants_rumble_detection/application/08_artifacts/inference_config.yaml"))
+
+        model = Model() 
+
+        storage = Storage(app_data_dir=tmp_session_dir)
+        file_manager = FileManager(model, storage)
+
+        for file in session.remaining_input_wav:
+            _ = [file_manager.add_file(str(file)) for file in session.remaining_input_wav]
+
+        # batch_size = 1
+        # file_batches = [self.selected_files[i:i + batch_size] for i in range(0, len(self.selected_files), batch_size)]
+
+        for file in file_manager.files:
+            worker = Worker(file=file, model=model, output_dir=self.output_dir, session=session, queue=self.queue)
             worker.finished.connect(self.file_finished)
             self.workers.append(worker)
             worker.start()
 
 
-
-    def file_finished(self, file_index, output_path):
+    def file_finished(self, output_path):
         self.completed_files += 1
         progress = int((self.completed_files / self.total_files) * 100)
         self.progress_bar.setValue(progress)
@@ -205,3 +192,4 @@ if __name__ == "__main__":
     mainWindow = MainWindow()     # Create an instance of MainWindow
     mainWindow.show()             # Show the main window
     sys.exit(app.exec_())         # Run the application's event loop
+

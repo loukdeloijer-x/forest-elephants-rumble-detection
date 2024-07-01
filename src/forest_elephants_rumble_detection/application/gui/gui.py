@@ -7,8 +7,7 @@ from pathlib import Path
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QPushButton, QLabel, 
                              QVBoxLayout, QWidget, QFileDialog, QProgressBar)
                     
-from PyQt5.QtCore import QThread, pyqtSignal, QTimer
-from multiprocessing import Queue
+from PyQt5.QtCore import QRunnable, QThread, pyqtSignal, QTimer, QThreadPool, QObject
 import time
 
 from forest_elephants_rumble_detection.application.gui.session.session import Session
@@ -16,30 +15,41 @@ from forest_elephants_rumble_detection.application.gui.session.storage import St
 from forest_elephants_rumble_detection.application.gui.session.files import FileManager
 from forest_elephants_rumble_detection.application.gui.session.model import Model
 
-# Worker class to handle processing in a separate thread
-class Worker(QThread):
-    # Signal to update progress (file index, progress percentage)
-    progress = pyqtSignal(int, int)  
-    finished = pyqtSignal(int, str)  # Signal to indicate processing finished (file index, output path)
+class WorkerSignals(QObject):
+    '''
+    Defines the signals available from a running worker thread.
 
-    def __init__(self, output_dir, model, queue, file, session, storage):
+    Supported signals are:
+
+    progress
+        int indicating % progress
+    finished
+        No data
+
+    '''
+    progress = pyqtSignal()
+    finished= pyqtSignal()
+
+# Worker class to handle processing in a separate thread
+class Worker(QRunnable):
+
+    def __init__(self, output_dir, model, file, session, storage):
         super().__init__()
         self.output_dir = output_dir
-        self.queue = queue # Queue to communicate progress
         self.file = file
         self.session = session
         self.model = model
         self.storage = storage
+        self.signals = WorkerSignals()
 
     def run(self):
-    
         self.model.analyze(file=self.file, output_dir=self.output_dir)
         self.storage.remove_file(self.file)
         self.session.update_annotation_txt(self.file.export())
         self.session.update_summary_df(self.file)
         self.session.save_summary_df()
             
-        self.finished.emit(self.file, str(self.output_dir))  # Emit finished signal with output path
+        self.signals.finished.emit()  # Emit finished signal with output path
 
 # Main window class
 class MainWindow(QMainWindow):
@@ -47,14 +57,21 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.initUI()
         self.input_dir = Path()
-        self.output_dir = Path()  # Initialize output_dir attribute
+        self.output_dir = Path()
+         # Initialize output_dir attribute
 
     def initUI(self):
         self.setWindowTitle('Audio Data Processor')  # Set window title
         self.setGeometry(100, 100, 400, 300)         # Set window size and position
 
+        logging.basicConfig(level='INFO')
         layout = QVBoxLayout()  # Create a vertical box layout
 
+        self.threadpool = QThreadPool()
+        self.max_threads = self.threadpool.maxThreadCount()
+
+        logging.info(f"Multithreading with maximum {self.max_threads} threads")
+  
         # Label to display the selected file information
         self.file_label = QLabel("No files selected")
         layout.addWidget(self.file_label)
@@ -92,13 +109,18 @@ class MainWindow(QMainWindow):
 
         self.message_label = QLabel("")  # Label to display messages
         layout.addWidget(self.message_label)
+        
+        # Label to display the number of active threads
+        self.thread_count_label = QLabel(f"Active threads: 0")
+        layout.addWidget(self.thread_count_label)
+
+        self.max_threads_label = QLabel(f"max threads (CPU cores): {self.max_threads}")
+        layout.addWidget(self.max_threads_label)
 
         # Container widget to hold the layout
         container = QWidget()
         container.setLayout(layout)
         self.setCentralWidget(container)
-
-        self.selected_files = []  # List to hold selected file paths
     
     def select_output_directory(self):
         # Open a directory dialog to select the output directory
@@ -108,12 +130,8 @@ class MainWindow(QMainWindow):
             self.output_label.setText(f"Output directory: {directory}")
             self.update_process_button_state()  # Checking that files and output directory are specified
 
-    def parse_wav_files(self, folder):
-        for root, dirs, files in os.walk(folder):
-            for filename in files:
-                if filename.endswith(".wav"):
-                    file_path = Path(root) / filename 
-                    self.selected_files.append(file_path)
+    def wav_count(self, folder):
+        self.num_files = sum(1 for root, dirs, files in os.walk(folder) for filename in files if filename.endswith(".wav"))
 
     def select_input_directory(self):
         # Open a directory dialog to select the output directory
@@ -122,64 +140,70 @@ class MainWindow(QMainWindow):
             self.input_dir = Path(input_directory)
             self.input_label.setText(f"Input directory: {input_directory}")
             self.update_process_button_state()  # Checking that files and output directory are specified
-            self.parse_wav_files(input_directory)
-            self.file_label.setText(f"Selected {len(self.selected_files)} files")
+            self.wav_count(input_directory)
+            self.file_label.setText(f"Selected {self.num_files} files")
 
     def update_process_button_state(self):
         # Enable the process button only if files are selected and output directory is set
-        if (self.selected_files or self.input_dir) and self.output_dir:
+        if self.input_dir and self.output_dir:
             self.process_button.setEnabled(True)
         else:
             self.process_button.setEnabled(False)
 
     def process_files(self):
         self.processing_start_time = time.time()  # Record start time
-        self.queue = Queue()
-        self.workers = []
-
-        self.total_files = len(self.selected_files)
+        self.session = Session(str(self.input_dir), str(self.output_dir)) 
+        self.total_files = len(self.session.remaining_input_wav)
         self.completed_files = 0
         self.progress_bar.setValue(0)
 
-        session = Session(str(self.input_dir), str(self.output_dir))
-        if not session.remaining_input_wav:
+        if not self.session.remaining_input_wav:
             self.message_label.setText("All files already processed")
             return
 
-        model = Model() 
+        self.model = Model() 
 
         self.tmp_session_dir = Path(self.output_dir) / "tmp_session"
         self.tmp_session_dir.mkdir(exist_ok=True)
 
-        storage = Storage(app_data_dir=self.tmp_session_dir)
-        file_manager = FileManager(model, storage)
+        self.storage = Storage(app_data_dir=self.tmp_session_dir)
+        self.file_manager = FileManager(self.model, self.storage)
 
-        for file in session.remaining_input_wav:
-            _ = [file_manager.add_file(str(file)) for file in session.remaining_input_wav]
+        for file in self.session.remaining_input_wav:
+            self.file_manager.add_file(str(file))
 
-        # batch_size = 1
-        # file_batches = [self.selected_files[i:i + batch_size] for i in range(0, len(self.selected_files), batch_size)]
+        self.check_and_launch_workers()
 
-        for file in file_manager.files:
-            worker = Worker(file=file, model=model, output_dir=self.output_dir, session=session, queue=self.queue, storage=storage)
 
-            worker.finished.connect(self.file_finished)
-            self.workers.append(worker)
-            worker.start()
-    
-    def file_finished(self):
+    def check_and_launch_workers(self):
+        while self.file_manager.files and self.threadpool.activeThreadCount() < self.max_threads: 
+            file = self.file_manager.files.pop(0)
+            worker = Worker(file=file, output_dir=self.output_dir, model=self.model, session=self.session, storage=self.storage)
+            worker.signals.finished.connect(self.file_finished)
+
+            self.threadpool.start(worker)
+            self.thread_count_label.setText(f"Active threads: {self.threadpool.activeThreadCount()}")
+
+    def update_time_and_progress(self):
         self.completed_files += 1
         progress = int((self.completed_files / self.total_files) * 100)
         self.progress_bar.setValue(progress)
+
         self.output_label.setText(f"Processed {self.completed_files}/{self.total_files} files")
     
         total_elapsed_time = time.time() - self.processing_start_time  # Calculate elapsed time
         self.time_label.setText(f"Processing Time: {int(total_elapsed_time)} seconds")
 
-        if self.completed_files == self.total_files:
-            self.process_button.setEnabled(True)
-            self.output_label.setText(f"All files processed. Output saved to: {self.output_dir}")
-            self.cleanup_tmp_session()
+    
+    def file_finished(self):
+        self.update_time_and_progress()
+
+        if (not self.file_manager.files) and (self.threadpool.activeThreadCount() < 1):
+                self.output_label.setText(f"All files processed. Output saved to: {self.output_dir}")
+                self.cleanup_tmp_session()
+
+        self.check_and_launch_workers(self)
+        self.thread_count_label.setText(f"Active threads: {self.threadpool.activeThreadCount()}")
 
     def cleanup_tmp_session(self):
         if self.tmp_session_dir and self.tmp_session_dir.exists():

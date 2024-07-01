@@ -7,7 +7,7 @@ from pathlib import Path
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QPushButton, QLabel, 
                              QVBoxLayout, QWidget, QFileDialog, QProgressBar)
                     
-from PyQt5.QtCore import QRunnable, QThread, pyqtSignal, QTimer, QThreadPool, QObject
+from PyQt5.QtCore import QRunnable, pyqtSignal, QThreadPool, QObject
 import time
 
 from forest_elephants_rumble_detection.application.gui.session.session import Session
@@ -17,17 +17,11 @@ from forest_elephants_rumble_detection.application.gui.session.model import Mode
 
 class WorkerSignals(QObject):
     '''
-    Defines the signals available from a running worker thread.
-
-    Supported signals are:
-
-    progress
-        int indicating % progress
+    Signal between worker and Main Window:
+    
     finished
-        No data
-
+        (No data)
     '''
-    progress = pyqtSignal()
     finished= pyqtSignal()
 
 # Worker class to handle processing in a separate thread
@@ -49,7 +43,7 @@ class Worker(QRunnable):
         self.session.update_summary_df(self.file)
         self.session.save_summary_df()
             
-        self.signals.finished.emit()  # Emit finished signal with output path
+        self.signals.finished.emit() 
 
 # Main window class
 class MainWindow(QMainWindow):
@@ -58,7 +52,7 @@ class MainWindow(QMainWindow):
         self.initUI()
         self.input_dir = Path()
         self.output_dir = Path()
-         # Initialize output_dir attribute
+
 
     def initUI(self):
         self.setWindowTitle('Audio Data Processor')  # Set window title
@@ -128,8 +122,8 @@ class MainWindow(QMainWindow):
         if directory:
             self.output_dir = Path(directory)
             self.output_label.setText(f"Output directory: {directory}")
-            self.update_process_button_state()  # Checking that files and output directory are specified
-
+            self.update_process_button_state() 
+            
     def wav_count(self, folder):
         self.num_files = sum(1 for root, dirs, files in os.walk(folder) for filename in files if filename.endswith(".wav"))
 
@@ -202,7 +196,7 @@ class MainWindow(QMainWindow):
                 self.output_label.setText(f"All files processed. Output saved to: {self.output_dir}")
                 self.cleanup_tmp_session()
 
-        self.check_and_launch_workers(self)
+        self.check_and_launch_workers()
         self.thread_count_label.setText(f"Active threads: {self.threadpool.activeThreadCount()}")
 
     def cleanup_tmp_session(self):
